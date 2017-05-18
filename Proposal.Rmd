@@ -1,0 +1,28 @@
+---
+title: 'Proposal: Forecasting Chinese CO~2~ Emissions Per Capita'
+subtitle: "ECON 5305 Final Project"
+author: "Joseph Carl"
+date: "May 9, 2017"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+## Proposal
+
+Over the past several decades, China's economy has experienced explosive growth. While China's economic development has lifted millions out of poverty and increased its citizens' quality of life, it has also led to unintended consequences, including increased pollution levels. Pollution has been linked to many health issues, and carbon dioxide pollution is the main driver of global climate change. Additionally, as of 2007, China is now the largest contributor to global carbon emissions. Understanding how emissions have changed over time and forecasting emissions in future years is vital to understanding the trajectory that Chinese emissions are taking. Forecasts are also necessary to begin implementing policies that will decrease the country's emissions. The purpose of this analysis is to model Chinese carbon dioxide (CO~2~) emissions per capita over time and to forecast emissions per capita for future periods.
+
+The data for this analysis was taken from Gapminder, an independent Swedish foundation dedicated to educating the public about global development and using statistics to promote a fact-based worldview. Though the data was downloaded from gapminder.org, it was compiled there from numerous sources. The CO~2~ emissions data are from the Carbon Dioxide Information Analysis Center at the U.S. Department of Energy. Other potential explanatory variables include electricity consumption per capita, coal consumption per capita, amount of industry as a percentage of GDP, and GDP per capita growth rates, as these may also explain a large portion of the variation in CO~2~ emissions per capita over time. The data on GDP growth rates, industry as a percentage of GDP, and electricity consumption per capita are from the World Bank DataBank. The data on coal consumption per capita comes from BP. If I can find historical data on China's unemployment and poverty rates, I will include those, as they may also explain variation in Chinese individuals' aggregate consumption, and thus variation in CO~2~ emissions per capita.
+
+The data is annual data ranging from 1971-2010 (exact years may vary slightly after data cleaning and differencing). The final four observations will be excluded from the analysis as validation data so that the forecasts can be compared to their actual values and thus assess the forecast's accuracy.
+
+## Sources
+
+Boden, T.A., G. Marland, and R.J. Andres. 2013. "Global, Regional, and National Fossil-Fuel CO2 Emissions." Carbon Dioxide Information Analysis Center, Oak Ridge National Laboratory, U.S. Department of Energy, Oak Ridge, Tenn., U.S.A. doi 10.3334/CDIAC/00001_V2013
+
+"BP statistical review of world energy." British Petroleum.  http://www.bp.com/en/global/corporate/energy-economics/statistical-review-of-world-energy.html (2012).
+
+"DataBank: World Development Indicators." The World Bank. http://databank.worldbank.org (2017).
+
+Rosling, Hans. "Gapminder." GapMinder Foundation http://www.gapminder.org 91 (2009).
+
