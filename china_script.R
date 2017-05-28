@@ -6,9 +6,11 @@
 rm(list=ls(all=TRUE))
 
 
-# Required libraries
+# Required libraries and functions
 library(readxl)
 library(tidyverse)
+library(urca)
+source("Functions_ECON_5305.R")
 
 # Read in co2 data
 co2percap <- read_excel("indicator CDIAC carbon_dioxide_emissions_per_capita.xlsx")
@@ -38,7 +40,8 @@ ts.plot(g.China)
 # Plot the ACF/PACF functions
 acf(g.China)
 pacf(g.China)
-
+acf.pacf(g.China)
+  # looks like possibly an ARMA (1,1) process 
 
 ## Other datasets - GDP per capita growth
 GDPperCap <- read_excel("indicatorwdigdp_percapita_growth.xlsx")
@@ -53,6 +56,11 @@ ChinaGDPgrowth <- GDPperCap %>%
   ts(., start=c(1961,1), frequency=1)
 
 ts.plot(ChinaGDPgrowth)
+
+acf(ChinaGDPgrowth)
+pacf(ChinaGDPgrowth)
+acf.pacf(ChinaGDPgrowth)
+  # Could be an ARMA(1,2) process
 
 ## Electricity consumption per capita
 ElecCons <- read_excel("Indicator_Electricity consumption per capita.xlsx")
@@ -85,6 +93,17 @@ ChinaInd <- Industry %>%
 
 ts.plot(ChinaInd)
 
+g.ind <- diff(log(ChinaInd))
+
+ts.plot(g.ind)
+
+acf(g.ind)
+pacf(g.ind)
+acf.pacf(g.ind)
+  # also hard to tell
+  # Maybe ARMA(6,6)?
+  # From plotting the original series, it looks like there could be a roughly 6-year cycle
+
 ## Coal consumption per capita
 Coal <- read_excel("Coal Consumption per capita.xls.xlsx")
 Coal <- Coal %>% 
@@ -103,3 +122,41 @@ g.coal <- diff(log(ChinaCoal))
 
 ts.plot(g.coal)
 
+acf(g.coal)
+pacf(g.coal)
+acf.pacf(g.coal)
+  # Maybe an ARMA(1,2)
+
+##### Unit Root Tests #####
+adf.results(China.co2, max.lags = 1)
+adf.results(g.China, max.lags = 1)
+  # Chinese CO2 emissions are nonstationary
+  # but the CO2 growth rate is stationary
+
+adf.results(ChinaGDPgrowth, max.lags = 1)
+  # the China GDP growth rate is already stationary
+
+adf.results(ChinaElec, max.lags = 1)
+  # China Electricity consumption per capita is nonstationary
+adf.results(g.elec, max.lags = 1)
+  # Even the growth rates of electricity consumption per capita are nonstationary
+  # 1st-diff the series and try again
+g.g.elec <- diff(g.elec)
+adf.results(g.g.elec, max.lags = 1)
+  # Now the series is stationary
+
+acf(g.g.elec)
+pacf(g.g.elec)
+acf.pacf(g.g.elec)
+  # this one is harder to tell
+  # ARMA(1,2), ARMA(1,6), AR(6)?
+
+adf.results(ChinaInd, max.lags = 1)
+  # % of GDP in Industry is nonstationary
+adf.results(g.ind, max.lags = 1)
+  # growth rate of % of GDP in industry is stationary
+
+adf.results(ChinaCoal, max.lags = 1)
+  # coal consumption per capita is nonstationary
+adf.results(g.coal, max.lags = 1)
+  # growth rate of coal consumption per capita is stationary
