@@ -10,6 +10,7 @@ rm(list=ls(all=TRUE))
 library(readxl)
 library(tidyverse)
 library(urca)
+library(dynlm)
 source("Functions_ECON_5305.R")
 
 # Read in co2 data
@@ -60,7 +61,7 @@ ts.plot(ChinaGDPgrowth)
 acf(ChinaGDPgrowth)
 pacf(ChinaGDPgrowth)
 acf.pacf(ChinaGDPgrowth)
-  # Could be an ARMA(1,2) process
+  # Could be an ARMA(2,1) process
 
 ## Electricity consumption per capita
 ElecCons <- read_excel("Indicator_Electricity consumption per capita.xlsx")
@@ -160,3 +161,77 @@ adf.results(ChinaCoal, max.lags = 1)
   # coal consumption per capita is nonstationary
 adf.results(g.coal, max.lags = 1)
   # growth rate of coal consumption per capita is stationary
+
+
+##### VAR Model ######
+
+# 3 variables: g.China (CO2), ChinaGDPgrowth, g.coal
+
+z <- cbind(g.China, ChinaGDPgrowth, g.coal) %>% na.omit
+cov.matrix <- var(z) # Reduced form covariance matrix
+
+# Estimate the models
+  # Will use 1 lag for all models because each variable exhibited AR(1) behavior
+
+eq1 <- dynlm(g.China ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.coal, 1) + 
+               L(g.China, 2) + L(ChinaGDPgrowth, 2) + L(g.coal, 2), data = z)
+eq2 <- dynlm(ChinaGDPgrowth ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.coal, 1) + 
+               L(g.China, 2) + L(ChinaGDPgrowth, 2) + L(g.coal, 2), data = z)
+eq3 <- dynlm(g.coal ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.coal, 1) + 
+               L(g.China, 2) + L(ChinaGDPgrowth, 2) + L(g.coal, 2), data = z)
+
+# Extract coefficients to a matrix
+coef.mat <- local({
+  out <- rbind(coef(eq1), coef(eq2), coef(eq3))
+  rownames(out) <- c("eq.CO2", "eq.GDP", "eq.COAL")
+  out
+})
+Dhat.0 <- coef.mat[,1, drop=FALSE]        # matrix of constants
+Dhat.1 <- coef.mat[,2:4, drop=FALSE]      # matrix of coefficeints on Y_{t-1} and X_{t-1}
+Dhat.2 <- coef.mat[,5:7, drop=FALSE]      # matrix of coefficeints on Y_{t-2} and X_{t-2}
+
+# Get fitted residuals
+ehat.CO2 <- resid(eq1)
+ehat.GDP <- resid(eq2)
+ehat.coal <- resid(eq3)
+ehat <- rbind(ehat.CO2, ehat.GDP, ehat.coal)
+
+sigma.ehat <- var(t(ehat))
+
+# Compare covariance matrix with computed matrix
+cov.matrix
+sigma.ehat
+
+# Cholesky decomposition
+B <- chol(sigma.ehat)
+
+# Recovered structural parameters
+solve(B)  # B-inverse
+A0 <- (-1)*(solve(B) - diag(3))   # A0 matrix
+Gamma.0 <- solve(B) %*% Dhat.0 
+Gamma.1 <- solve(B) %*% Dhat.1
+Gamma.2 <- solve(B) %*% Dhat.2
+
+# View the recovered structural parameters
+Gamma.0; Gamma.1; Gamma.2
+
+# Compare to textbook commands
+var.mod <- vars::VAR(z, ic = c("AIC"), lag.max=4)
+summary(var.mod)
+
+var.1lag <- vars::VAR(z, p=1)
+logLik(var.1lag)
+var.2lag <- vars::VAR(z, p=2)
+summary(var.2lag)
+logLik(var.2lag)
+
+LRtest.stat <- 2*(logLik(var.2lag)-logLik(var.1lag))
+pchisq(LRtest.stat, df = 12, lower.tail = F)
+  # the likelihood ratio test says that model with 2 lags is better fit than 1 lag
+
+# Select max number of lags
+vars::VARselect(z, lag.max = 8, type = "const")
+  # This method agrees that 1 lag is the best choice for the VAR model
+
+test.mod <- dynlm(g.China ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.coal, 1) + L(g.g.elec) + L(g.ind,1))
+summary(test.mod)
