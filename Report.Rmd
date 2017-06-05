@@ -2,23 +2,26 @@
 title: "Forecasting Chinese Carbon Dioxide Emissions"
 author: "Joseph Carl"
 date: "June 7, 2017"
-output: html_notebook
+output:
+  pdf_document: default
+  html_notebook: default
 ---
 
 ## Introduction
 
 research question/motivation, description of topic, lit. review
 
-Over the past several decades, China's economy has experienced explosive growth. While China's economic development has lifted millions out of poverty and increased its citizens' quality of life, it has also led to unintended consequences, including increased pollution levels. Pollution has been linked to many health issues, and carbon dioxide pollution is the main driver of global climate change. Additionally, as of 2007, China is now the largest contributor to global carbon emissions. Understanding how emissions have changed over time and forecasting emissions in future years is vital to understanding the trajectory that Chinese emissions are taking. Forecasts are also necessary to begin implementing policies that will decrease the country's emissions. The purpose of this analysis is to model Chinese carbon dioxide (CO~2~) emissions per capita over time and to forecast emissions per capita for future periods.
+Over the past several decades, China's economy has experienced explosive growth. While China's economic development has lifted millions out of poverty and increased its citizens' quality of life, it has also led to unintended consequences, including increased pollution levels. Pollution has been linked to many health issues, and carbon dioxide pollution is the main driver of global climate change. Additionally, as of 2007, China is now the largest contributor to global carbon emissions. Understanding how emissions have changed over time and forecasting emissions in future years is vital to understanding the trajectory that Chinese emissions are taking. Forecasts are also necessary to begin implementing policies that will decrease the country's emissions. The purpose of this analysis is to model Chinese carbon dioxide (CO~2~) emissions per capita over time. Specifically, I intend to use a vector autoregression (VAR) model to understand the relationship between emissions, GDP growth, and electricity consumption.
 
 
-```{r setup, echo=FALSE}
+```{r setup, echo=FALSE, message=FALSE}
 # Required libraries and functions
 library(readxl)
 library(tidyverse)
 library(urca)
 library(dynlm)
 library(forecast)
+library(stargazer)
 source("Functions_ECON_5305.R")
 source("data_cleaning_transformation.R")
 ```
@@ -27,10 +30,7 @@ source("data_cleaning_transformation.R")
 
 description of data, data source(s), transformations to data, unit root tests, maybe some EDA
 
-The data for this analysis was taken from Gapminder, an independent Swedish foundation dedicated to educating the public about global development and using statistics to promote a fact-based worldview. Though the data was downloaded from gapminder.org, it was compiled there from numerous sources. The CO~2~ emissions data are from the Carbon Dioxide Information Analysis Center at the U.S. Department of Energy. Other potential explanatory variables include electricity consumption per capita, coal consumption per capita, amount of industry as a percentage of GDP, and GDP per capita growth rates, as these may also explain a large portion of the variation in CO~2~ emissions per capita over time. The data on GDP growth rates, industry as a percentage of GDP, and electricity consumption per capita are from the World Bank DataBank. The data on coal consumption per capita comes from BP. If I can find historical data on China's unemployment and poverty rates, I will include those, as they may also explain variation in Chinese individuals' aggregate consumption, and thus variation in CO~2~ emissions per capita.
-
-The data is annual data ranging from 1971-2010 (exact years may vary slightly after data cleaning and differencing). The final four observations will be excluded from the analysis as validation data so that the forecasts can be compared to their actual values and thus assess the forecast's accuracy.
-
+The data for this analysis was taken from Gapminder, an independent Swedish foundation dedicated to educating the public about global development and using statistics to promote a fact-based worldview. Though the data was downloaded from gapminder.org, it was compiled there from numerous sources. The CO~2~ emissions data are from the Carbon Dioxide Information Analysis Center at the U.S. Department of Energy. The two explanatory variables for the model are electricity consumption per capita and GDP per capita growth rates, as these may also explain a large portion of the variation in CO~2~ emissions per capita over time. The data on GDP growth rates and electricity consumption per capita are from the World Bank DataBank. The data for the model is annual data ranging from 1972-2010. 
 
 ## Methodology
 
@@ -38,14 +38,14 @@ research question, empirical methods (VAR), lag order selection, logic behind im
 
 ### Unit Root Tests
 
-Though the initial data comes in its original units (tonnes of CO~2~ per capita, GDP per capita growth, and tonnes of oil equivalent per person), it is appropriate to test for a unit root on each of these variables. Because vector autoregression models are built from autoregressive properties, I test for a unit root to make sure the process being modeled is covariance stationary. Making sure that each variable is covariance stationary will also help with selecting the correct number of lags that should be included in the model. A quick look at each of the three variables suggests that annual CO~2~ emissions and coal consumption may not be covariance stationary, but GDP growth per capita might be stationary.
+Though the initial data comes in its original units (tonnes of CO~2~ per capita, GDP per capita percentage growth, and tonnes of oil equivalent per person), it is appropriate to test for a unit root on each of these variables. Because vector autoregression models are built from autoregressive properties, I test for a unit root to make sure the process being modeled is covariance stationary. Making sure that each variable is covariance stationary will also help with selecting the correct number of lags that should be included in the model. A quick look at each of the three variables suggests that annual CO~2~ emissions and electricity consumption do not have a constant mean over time and thus may not be covariance stationary, but GDP growth per capita might be stationary.
 
 ```{r, echo=FALSE, fig.height=2}
 local({
   par(mfrow=c(1,3))
   ts.plot(China.co2, main="Annual CO2 Emissions", xlab = "Year", ylab = "Tonnes/Person")
   ts.plot(ChinaGDPgrowth, main="GDP Growth per Capita", xlab="Year", ylab = "% Change")
-  ts.plot(ChinaCoal, main="Annual Coal Consumption", xlab = "Year", ylab = "Tonnes of Oil Equivalent/Person")
+  ts.plot(ChinaElec, main="Annual Electric Consumption", xlab = "Year", ylab = "Kilowatt-Hours/Person")
 })
 ```
 
@@ -57,22 +57,26 @@ print("Annual CO2 Emissions")
 adf.results(China.co2, max.lags = 1) %>% as.data.frame(.)
 print("Annual GDP per Capita Growth")
 adf.results(ChinaGDPgrowth, max.lags = 1) %>% as.data.frame(.)
-print("Annual Coal Consumption")
-adf.results(ChinaCoal, max.lags = 1) %>% as.data.frame(.)
+print("Annual Electricity Consumption")
+adf.results(ChinaElec, max.lags = 1) %>% as.data.frame(.)
 ```
 
-As the results show, we fail to reject the null hypothesis of nonstationarity for annual carbon dioxide emissions and coal consumption. However, we are able to reject the null hypothesis that GDP per capita growth is nonstationary in favor of the alternate hypothesis that it is stationary. This makes sense because this variable is already a growth rate, and growth rates tend to be stationary. I then log-difference the CO~2~ emissions and coal consumption data so that those transformed variables are the growth rates of the original variables, and rerun the augmented Dickey-Fuller test on the transformed data. Those results are presented below.
+As the results show, we fail to reject the null hypothesis of nonstationarity for annual carbon dioxide emissions and coal consumption. However, we are able to reject the null hypothesis that GDP per capita growth is nonstationary in favor of the alternate hypothesis that it is stationary. This makes sense because this variable is already a growth rate, and growth rates tend to be stationary. I then log-difference the CO~2~ emissions and electricity consumption data so that those transformed variables are the growth rates of the original variables, and rerun the augmented Dickey-Fuller test on the transformed data. Those results are presented below.
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, results='asis'}
 # CO2 growth
-print("Change in Annual CO2 Emissions (%)")
-adf.results(g.China, max.lags = 1) %>% as.data.frame(.)
-print("Change in Annual Coal Consumption (%)")
-adf.results(g.coal, max.lags = 1) %>% as.data.frame(.)
+# print("Change in Annual CO2 Emissions (%)")
+adf.results(g.China, max.lags = 1) %>% 
+  knitr::kable(., format = "latex", caption = "Change in Annual CO2 Emissions (%)")
+# print("Change in Annual Electricity Consumption (%)")
+adf.results(g.elec, max.lags = 1) %>% 
+  knitr::kable(., format = "latex", caption = "Change in Annual Electricity Consumption (%)")
 
 ```
 
-The results show that on the transformed data, we can now safely reject the null hypothesis that the growth rates of CO~2~ emissions and coal consumption are nonstationary in favor of the alternate hypothesis that they are stationary. These two transformed variables along with the GDP growth rate will be used in the VAR model.
+The results show that on the transformed data, we can now safely reject the null hypothesis that the growth rate of CO~2~ emissions is nonstationary in favor of the alternate hypothesis that they are stationary. However, the test results say we cannot reject the null hypothesis that the growth rate of electricity consumption is nonstationary. From looking at the test statistics, though, two are quite close to their critical values. If I run an augmented Dickey-Fuller test but use a significance level of 0.10 instead of 0.05, I then reject the null hypothesis in favor of the alternate stationarity hypothesis. Similarly, from plotting the the growth rate of electricity consumption, it appears to be approximately stationary (see below).
+
+Because of these test results at the 0.10 level, the data appearing to be approximately stationary, and the augmented Dickey-Fuller test known for having a high error rate, I decide to keep the growth rate of electricity consumption in my model instead of differencing the data again and including that variable. The two transformed variables along with the GDP growth rate will be used for the VAR model.
 
 As the following graph shows, both transformed variables appear much more stationary than their original versions appeared.
 
@@ -81,7 +85,7 @@ local({
   par(mfrow=c(1,2))
   ts.plot(g.China, main=expression(paste(Delta, "Annual CO2 Emissions")), 
           xlab="Year", ylab="% Change")
-  ts.plot(g.coal, main=expression(paste(Delta, "Annual Coal Consumption")), 
+  ts.plot(g.elec, main=expression(paste(Delta, "Annual Electricity Consumption")), 
           xlab="Year", ylab="% Change")
 })
 ```
@@ -97,21 +101,32 @@ local({
   Pacf(g.China, lag.max = 10, main="PACF of CO2 Growth Rate")
   Acf(ChinaGDPgrowth, lag.max = 10, main="ACF of GDP Growth Rate")
   Pacf(ChinaGDPgrowth, lag.max = 10, main="PACF of GDP Growth Rate")
-  Acf(g.coal, lag.max = 10, main="ACF of Coal Growth Rate")
-  Pacf(g.coal, lag.max = 10, main="PACF of Coal Growth Rate")
+  Acf(g.elec, lag.max = 10, main="ACF of Electricity Growth Rate")
+  Pacf(g.elec, lag.max = 10, main="PACF of Electricity Growth Rate")
 })
 ```
 
-For the CO~2~ growth rate, there is one statistically significant spike in both the ACF and PACF, suggesting that series follows an ARMA(1,1) process. The GDP growth rates have two statistically significant spikes in the PACF, and the first and sixth spikes in the ACF are statistically significant. This suggests the series could follow an ARMA(2,1) or ARMA(2,6) process. However, since I am more interested in the AR(2) piece for the VAR model, I do not explore that further. The coal growth rate has two statistically significant spikes in the PACF, and the first and third lags of the ACF are statistically significant, suggesting either an AR(2,1) or AR(2,3) process. Looking at only the AR lags, the variables have AR processes of 1, 2, and 2, so I will use two lags for each variable in the VAR model. As the CO~2~ per capita growth rate appears to be an AR(1) process, the effect of its second lag will likely be statistically no different than zero.
+For the CO~2~ growth rate, there is one statistically significant spike in both the ACF and PACF, suggesting that series follows an ARMA(1,1) process. The GDP growth rates have two statistically significant spikes in the PACF, and the first and sixth spikes in the ACF are statistically significant. This suggests the series could follow an ARMA(2,1) or ARMA(2,6) process. However, since I am more interested in the AR(2) piece for the VAR model, I do not explore that further. The electricity growth rate has one statistically significant spike in both the ACF and PACF, suggesting an ARMA(1,1) process. Looking at only the AR lags, the variables have AR processes of 1, 2, and 2, so it looks like a VAR(1) or VAR(2) system would be appropriate to estimate.
+
+For comparison, I also run the `VARselect` command from the `vars` package on the data. This command runs a VAR(1) through VAR(8) model on the data, and selects the VAR process that has the lowest AIC or BIC. The results of that test are given below.
+
+```{r, echo=FALSE}
+# 3 variables: g.China (CO2), ChinaGDPgrowth, g.elec
+z <- cbind(g.China, ChinaGDPgrowth, g.elec) %>% na.omit
+
+vars::VARselect(z, lag.max = 8, type = "trend")
+```
+
+Though all the models have AICs and BICs close to each other, the results show that the lowest AIC/BIC occur on the AR(1) model. Because of this, I estimate a VAR(1) model for this analysis. Even though individual variables may have an AR(2) process, it could be the case that the variables as a system follow a VAR(1) process. Additionally, considering that the data for this analysis is yearly, it makes sense that carbon dioxide emissions, GDP growth, and electricity consumption from two or more years ago are unlikely to have significant explanatory power for those variables today.
 
 ### The Reduced-Form VAR Model
 
-I estimate the reduced form VAR model of the following form:
+I estimate the reduced form VAR model of the following system of equations:
 
 $$\begin{bmatrix}
     \Delta CO_2\\
     \Delta GDP \\
-    \Delta Coal\end{bmatrix} 
+    \Delta Elec\end{bmatrix} 
     =
     \begin{bmatrix}
     \delta_{10} \\
@@ -126,7 +141,7 @@ $$\begin{bmatrix}
     \begin{bmatrix}
     \Delta CO_{2.t-1}\\
     \Delta GDP_{t-1} \\
-    \Delta Coal_{t-1} \end{bmatrix}
+    \Delta Elec_{t-1} \end{bmatrix}
     +
     \begin{bmatrix}
     \delta_{14} + \delta_{15} + \delta_{16} \\
@@ -136,15 +151,128 @@ $$\begin{bmatrix}
     \begin{bmatrix}
     \Delta CO_{2.t-2}\\
     \Delta GDP_{t-2} \\
-    \Delta Coal_{t-2} \end{bmatrix}$$
+    \Delta Elec_{t-2} \end{bmatrix}$$
 
-My goal is to recover the original structural parameters: $\mathbf{A_0}, \mathbf{\Gamma_0}, \mathbf{\Gamma_1}, \mathbf{\Gamma_2}$. Simply put, I am estimating three separate equations, each of which says that the change in CO~2~ emissions per capita, GDP growth, and change in coal consumption per capita are functions of the previous two years' change in CO~2~ emissions per capita, GDP growth, and change in coal consumption per capita. 
+My goal is to recover the original structural parameters: $\mathbf{A_0}, \mathbf{\Gamma_0}, \mathbf{\Gamma_1}$. Simply put, I am estimating three separate equations, each of which says that the change in CO~2~ emissions per capita, GDP growth, and change in electricity consumption per capita are functions of the previous year's change in CO~2~ emissions per capita, GDP growth, and change in electricity consumption per capita. However, the matrix algebra involved in recovering the parameters requires the assumption that some coefficients equal zero, or else the model cannot be solved. 
+
+For the Cholesky decomposition of the sigma matrix, I select an upper Cholesky matrix. I choose the upper matrix because of the order the variables enter the model (CO~2~, GDP, and then electricity growth), and the theory behind how the variables interact. For example, the second row, first column says that carbon dioxide growth has no effect on GDP growth, but the nonzero element in the first row second column says that GDP growth affects CO~2~ emissions. This makes sense, because more economic output means more production in factories, more cars on the road, and increased energy consumption, all of which increase emissions. It is a much weaker argument that some may cut back their energy consumption in response to economic growth, hence the zero element. The third row has zeros in the first two columns, indicating that carbon dioxide emissions and GDP growth do not affect growth in electricity consumption. The first of these makes sense, as electricity demand increases fossil fuel consumption, not the other way around. As for the second argument, it is still plausible that increased GDP could increase electricity consumption, as consumers and businesses begin to consume and invest more energy in response to economic growth. However, the alternate proposal that electricity consumption causes GDP growth is stronger, as electricity consumption is directly a part of the GDP calculation.
 
 ### Logic Behind Imposing the Structure
 
 ## Results
 
 results, tables, economic interpretation, forecast a few periods?
+
+The estimated results of the reduced-form equations are provided in the following table. 
+
+```{r, echo=FALSE, warning=FALSE, results='asis'}
+# Estimate the models
+eq1 <- dynlm(g.China ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
+eq2 <- dynlm(ChinaGDPgrowth ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
+eq3 <- dynlm(g.elec ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
+
+# Extract coefficients to a matrix
+coef.mat <- local({
+  out <- rbind(coef(eq1), coef(eq2), coef(eq3))
+  rownames(out) <- c("eq.CO2", "eq.GDP", "eq.elec")
+  out
+})
+Dhat.0 <- coef.mat[,1, drop=FALSE]        # matrix of constants
+Dhat.1 <- coef.mat[,2:4, drop=FALSE]      # matrix of coefficeinats on t-1 variables
+
+# Get fitted residuals
+ehat.CO2 <- resid(eq1)
+ehat.GDP <- resid(eq2)
+ehat.elec <- resid(eq3)
+ehat <- rbind(ehat.CO2, ehat.GDP, ehat.elec)
+
+sigma.ehat <- var(t(ehat))
+
+# Cholesky decomposition
+B <- chol(sigma.ehat)
+  # Cholesky by default returns the upper matrix, which is what I want in this case
+
+stargazer(eq1, eq2, eq3, type = "latex", header = F, 
+          covariate.labels = c("lag CO2", "lag GDP", "lag Electricity"),
+          dep.var.labels = c("CO2", "GDP", "Electricity"))
+
+```
+
+The F-statistic of each model is statistically significant and each R^2^ value is above 0.2, indicating all three equations are useful and have a decent amount of explanatory power for only having two explanatory variables each. Interestingly, though, multiple variables lack statistical significance in the models. The first equation says that a 1% increase in carbon dioxide emissions in the previous year is associated with a 0.7% increase in carbon dioxide emissions in the current year, all else held constant. However, a 1% increase in GDP in the previous year has almost no effect on emissions this year, and a 1% increase in electricity consumption in the previous year is actually associated with a 0.39% decrease in emissions in the following year, though this value is not statistically different from zero. In the second equation for GDP growth, the only significant variable is the lag of GDP growth, suggesting that previous year's emissions and electricity consumption growth do not explain GDP in the current year. The coefficients for each of those variables are quite large, though, saying that a 1% increase in emissions last year is associated with a 16.4% increase in GDP this year, whereas a 1% increase in electricity consumption this year is actually associated with a 38.0% decrease in GDP this year. Both of these values have large standard errors, though, indicating they are not statistically different from zero. Additionally, because of electricity consumption and emissions being highly correlated, that could explain the reason for the unexpected results. In the final equation, the only statistically significant predictor of electricity consumption growth is actually emissions growth in the previous year. A 1% increase in emissions last year is associated with a 0.65% increase in electricity consumption this year, all else constant. Though emissions seem unlikely to cause electricity demand, it could be that because these two are correlated, they tend to move in the same direction even one time period apart.
+
+### Recovered Structural Parameters
+
+```{r, echo=FALSE}
+# Recovered structural parameters
+solve(B)  # B-inverse
+A0 <- (-1)*(solve(B) - diag(3))   # A0 matrix
+Gamma.0 <- solve(B) %*% Dhat.0 
+Gamma.1 <- solve(B) %*% Dhat.1
+rownames(Gamma.0) <- c("g.C02", "g.GDP", "g.elec")
+rownames(Gamma.1) <- c("g.C02", "g.GDP", "g.elec")
+# View the recovered structural parameters
+Gamma.0; Gamma.1
+
+```
+
+
+### Impulse Response Functions
+
+One advantage of a VAR system of equations is it allows modeling a "shock" to one variable and calculating its effect on the system over several periods. To model this, I calculate the effect of a one standard deviation shock to each of the three variables, where one standard deviation refers to the deviation in the residuals of each of the three equations. The results of the three shocks are provided in the following chart. 
+
+```{r, echo=FALSE}
+# Impulse response function for a 1-std dev shock
+
+# Dr. Bejan's IRF function
+irf.fun <- function(A.mat, C.mat, struct.shock, n.ahead){
+  #---------------------------------------------------------------#
+  #-- Inputs:                                                   --#
+  #--     A.mat: 2-by-2 matrix of 1st lag coefficients          --#
+  #--     C.mat: Choleski decomposition matrix                  --#
+  #--     n.ahead: length of the IRFs (periods after the shock) --#
+  #--     struct.shock: (0,1) vector of structural shocks       --#
+  #---------------------------------------------------------------#
+  shocks <- matrix(struct.shock, ncol=1)                        
+  df <- matrix(0, ncol=n.ahead, nrow=nrow(A.mat))
+  for (i in 1:n.ahead){
+    if (i == 1){
+      df[,i] <- C.mat %*% shocks
+    } else {
+      df[,i] <- A.mat %*%  df[,i-1]
+    }
+  }  
+  rownames(df) <- rownames(A.mat)
+  colnames(df) <- paste("irf.",0:(n.ahead-1),sep="")
+  out <- t(df)  # transpose (time: by row, variable: by column)
+}
+co2.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(1,0,0), n.ahead = 12)
+gdp.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,1,0), n.ahead = 12)
+elec.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,0,1), n.ahead = 12)
+
+# Plot the IRF for each shock on each variable (9x9)
+local({
+  par(mar = rep(2, 4))
+  par(mfrow=c(3,3))    # place 4 plots on 1 page (2-by-2)
+  ts.plot(co2.shock.irf[,"eq.CO2"], ylab ="CO2", main="CO2 --> CO2")
+  ts.plot(co2.shock.irf[,"eq.GDP"], ylab ="GDP", main="CO2 --> GDP")
+  ts.plot(co2.shock.irf[,"eq.elec"], ylab ="Electricity", main="CO2 --> Elec")
+  
+  ts.plot(gdp.shock.irf[,"eq.CO2"], ylab ="CO2", main="GDP --> CO2")
+  ts.plot(gdp.shock.irf[,"eq.GDP"], ylab ="GDP", main="GDP --> GDP")
+  ts.plot(gdp.shock.irf[,"eq.elec"], ylab ="Elec", main="GDP --> Elec")
+  
+  ts.plot(elec.shock.irf[,"eq.CO2"], ylab ="CO2", main="Elec --> CO2")
+  ts.plot(elec.shock.irf[,"eq.GDP"], ylab ="GDP", main="Elec --> GDP")
+  ts.plot(elec.shock.irf[,"eq.elec"], ylab ="x", main="Elec --> Elec")
+  par(mfrow=c(1,1))    # place 1 plot per page
+})
+
+
+```
+
+Each row of graphs refer to the variable being shocked, and each column refers to the variable affected by the shock. For example, the upper left graph shows that a one-time spike in CO~2~ emissions results in a roughly 0.04% increase in CO~2~ emissions for that year, which then declines over time. By year four, only emissions are only 0.01% higher than they were relative to pre-shock levels. The same shock to emissions does not affect GDP growth rates or electricity consumption in the same period as the shock, but two periods later the same shock results in GDP growth and electricity consumption growth roughly 0.7% and 0.015% higher, respectively. Those shocks then die out over the following years. It is interesting that increased emissions would suggest GDP growth also rises. However, thinking about a shock to emissions that was not caused by GDP growth would include things like environmental accidents, such as oil spills or methane leaks that are unrelated to economic output. For this kind of emissions shock, it is plausible that GDP could actually grow after an environmental accident, as the government and businesses would have to spend more to clean it up.
+
+
 
 ## Conclusion
 
@@ -158,5 +286,7 @@ Boden, T.A., G. Marland, and R.J. Andres. 2013. "Global, Regional, and National 
 
 "DataBank: World Development Indicators." The World Bank. http://databank.worldbank.org (2017).
 
+Hlavac, Marek (2015). stargazer: Well-Formatted Regression and Summary Statistics Tables. R package version 5.2. http://CRAN.R-project.org/package=stargazer 
+ 
 Rosling, Hans. "Gapminder." GapMinder Foundation http://www.gapminder.org 91 (2009).
 
