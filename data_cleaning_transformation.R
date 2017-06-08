@@ -25,7 +25,7 @@ China.co2 <- China %>% filter(Year>=1960) %>%
   select(CO2PerCap) %>% ts(., start=c(1960, 1), frequency=1)
 
 # Calculate growth rate of CO2 emissions (log-diff)
-g.China <- diff(log(China.co2))
+g.CO2 <- diff(log(China.co2))
 
 ## Other datasets - GDP per capita growth
 GDPperCap <- read_excel("indicatorwdigdp_percapita_growth.xlsx")
@@ -33,7 +33,7 @@ GDPperCap <- GDPperCap %>%
   gather("Year", "GDPperCap", 2:53) %>% 
   mutate_at(vars(Year), as.numeric) %>% 
   rename(Country = `GDP per capita growth (annual %)`)
-ChinaGDPgrowth <- GDPperCap %>% 
+g.GDP <- GDPperCap %>% 
   filter(Country == "China") %>% 
   na.omit %>% 
   select(GDPperCap) %>% 
@@ -82,6 +82,6 @@ ChinaCoal <- Coal %>%
 g.coal <- diff(log(ChinaCoal))
 
 
-# Combine g.China, ChinaGDPgrowth, and g.coal into a single object
-z <- cbind(g.China, ChinaGDPgrowth, g.coal) %>% na.omit
+# Combine g.CO2, g.GDP, and g.coal into a single object
+z <- cbind(g.CO2, g.GDP, g.coal) %>% na.omit
 

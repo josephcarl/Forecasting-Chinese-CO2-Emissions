@@ -35,14 +35,14 @@ China.co2 <- China %>% filter(Year>=1960) %>%
 ts.plot(China.co2)
 
 # Calculate growth rate of CO2 emissions (log-diff)
-g.China <- diff(log(China.co2))
+g.CO2 <- diff(log(China.co2))
 
-ts.plot(g.China)
+ts.plot(g.CO2)
 
 # Plot the ACF/PACF functions
-acf(g.China)
-pacf(g.China)
-acf.pacf(g.China)
+acf(g.CO2)
+pacf(g.CO2)
+acf.pacf(g.CO2)
   # looks like possibly an ARMA (1,1) process 
 
 ## Other datasets - GDP per capita growth
@@ -51,17 +51,17 @@ GDPperCap <- GDPperCap %>%
   gather("Year", "GDPperCap", 2:53) %>% 
   mutate_at(vars(Year), as.numeric) %>% 
   rename(Country = `GDP per capita growth (annual %)`)
-ChinaGDPgrowth <- GDPperCap %>% 
+g.GDP <- GDPperCap %>% 
   filter(Country == "China") %>% 
   na.omit %>% 
   select(GDPperCap) %>% 
   ts(., start=c(1961,1), frequency=1)
 
-ts.plot(ChinaGDPgrowth)
+ts.plot(g.GDP)
 
-acf(ChinaGDPgrowth)
-pacf(ChinaGDPgrowth)
-acf.pacf(ChinaGDPgrowth)
+acf(g.GDP)
+pacf(g.GDP)
+acf.pacf(g.GDP)
   # Could be an ARMA(2,1) process
 
 ## Electricity consumption per capita
@@ -178,11 +178,11 @@ ts.plot(g.ex.rate)
 
 ##### Unit Root Tests #####
 adf.results(China.co2, max.lags = 1)
-adf.results(g.China, max.lags = 1)
+adf.results(g.CO2, max.lags = 1)
   # Chinese CO2 emissions are nonstationary
   # but the CO2 growth rate is stationary
 
-adf.results(ChinaGDPgrowth, max.lags = 1)
+adf.results(g.GDP, max.lags = 1)
   # the China GDP growth rate is already stationary
 
 adf.results(ChinaElec, max.lags = 1)
@@ -226,9 +226,9 @@ adf.results(g.ex.rate, max.lags = 1)
 
 ##### VAR Model ######
 
-# 3 variables: g.China (CO2), ChinaGDPgrowth, g.elec
+# 3 variables: g.CO2 (CO2), g.GDP, g.elec
 
-z <- cbind(g.China, ChinaGDPgrowth, g.elec) %>% na.omit
+z <- cbind(g.CO2, g.elec, g.GDP) %>% na.omit
 cov.matrix <- var(z) # Reduced form covariance matrix
 
 # Estimate the models
@@ -236,19 +236,19 @@ cov.matrix <- var(z) # Reduced form covariance matrix
   # and theoretically it makes sense that what happened 2+ years ago has little explanatory power
   # for what happens today
 
-eq1 <- dynlm(g.China ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
-eq2 <- dynlm(ChinaGDPgrowth ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
-eq3 <- dynlm(g.elec ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
+eq1 <- dynlm(g.CO2 ~ L(g.CO2, 1) + L(g.elec, 1) + L(g.GDP, 1), data = z)
+eq2 <- dynlm(g.elec ~ L(g.CO2, 1) + L(g.elec, 1) + L(g.GDP, 1), data = z)
+eq3 <- dynlm(g.GDP ~ L(g.CO2, 1) + L(g.elec, 1) + L(g.GDP, 1), data = z)
 
 # Nice output (Stargazer) of 3 equations
-stargazer(eq1, eq2, eq3, type = "text", covariate.labels = c("lag CO2", "lag GDP", "lag Electricity"),
-          dep.var.labels = c("CO2", "GDP", "Electricity"))
+stargazer(eq1, eq2, eq3, type = "text", covariate.labels = c("lag CO2", "lag Electricity", "lag GDP"),
+          dep.var.labels = c("CO2", "Electricity", "GDP"))
 
 
 # Extract coefficients to a matrix
 coef.mat <- local({
   out <- rbind(coef(eq1), coef(eq2), coef(eq3))
-  rownames(out) <- c("eq.CO2", "eq.GDP", "eq.elec")
+  rownames(out) <- c("eq.CO2", "eq.elec", "eq.GDP")
   out
 })
 Dhat.0 <- coef.mat[,1, drop=FALSE]        # matrix of constants
@@ -256,9 +256,10 @@ Dhat.1 <- coef.mat[,2:4, drop=FALSE]      # matrix of coefficeints on Y_{t-1} an
 
 # Get fitted residuals
 ehat.CO2 <- resid(eq1)
-ehat.GDP <- resid(eq2)
-ehat.elec <- resid(eq3)
-ehat <- rbind(ehat.CO2, ehat.GDP, ehat.elec)
+ehat.elec <- resid(eq2)
+ehat.GDP <- resid(eq3)
+
+ehat <- rbind(ehat.CO2, ehat.elec, ehat.GDP)
 
 sigma.ehat <- var(t(ehat))
 
@@ -298,7 +299,7 @@ pchisq(LRtest.stat, df = 12, lower.tail = F)
 vars::VARselect(z, lag.max = 8, type = "trend")
   # This method agrees that 1 lag is the best choice for the VAR model
 
-test.mod <- dynlm(g.China ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.coal, 1) + L(g.g.elec) + L(g.ind,1))
+test.mod <- dynlm(g.CO2 ~ L(g.CO2, 1) + L(g.GDP, 1) + L(g.coal, 1) + L(g.g.elec) + L(g.ind,1))
 summary(test.mod)
 
 
@@ -329,27 +330,51 @@ irf.fun <- function(A.mat, C.mat, struct.shock, n.ahead){
   out <- t(df)  # transpose (time: by row, variable: by column)
 }
 co2.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(1,0,0), n.ahead = 12)
-gdp.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,1,0), n.ahead = 12)
-elec.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,0,1), n.ahead = 12)
+elec.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,1,0), n.ahead = 12)
+gdp.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,0,1), n.ahead = 12)
 
 local({
   par(mar = rep(2, 4))
   par(mfrow=c(3,3))    # place 4 plots on 1 page (2-by-2)
   ts.plot(co2.shock.irf[,"eq.CO2"], ylab ="CO2", main="CO2 --> CO2")
-  ts.plot(co2.shock.irf[,"eq.GDP"], ylab ="GDP", main="CO2 --> GDP")
   ts.plot(co2.shock.irf[,"eq.elec"], ylab ="Electricity", main="CO2 --> Elec")
-  
-  ts.plot(gdp.shock.irf[,"eq.CO2"], ylab ="CO2", main="GDP --> CO2")
-  ts.plot(gdp.shock.irf[,"eq.GDP"], ylab ="GDP", main="GDP --> GDP")
-  ts.plot(gdp.shock.irf[,"eq.elec"], ylab ="Elec", main="GDP --> Elec")
+  ts.plot(co2.shock.irf[,"eq.GDP"], ylab ="GDP", main="CO2 --> GDP")
   
   ts.plot(elec.shock.irf[,"eq.CO2"], ylab ="CO2", main="Elec --> CO2")
-  ts.plot(elec.shock.irf[,"eq.GDP"], ylab ="GDP", main="Elec --> GDP")
   ts.plot(elec.shock.irf[,"eq.elec"], ylab ="x", main="Elec --> Elec")
+  ts.plot(elec.shock.irf[,"eq.GDP"], ylab ="GDP", main="Elec --> GDP")
+  
+  ts.plot(gdp.shock.irf[,"eq.CO2"], ylab ="CO2", main="GDP --> CO2")
+  ts.plot(gdp.shock.irf[,"eq.elec"], ylab ="Elec", main="GDP --> Elec")
+  ts.plot(gdp.shock.irf[,"eq.GDP"], ylab ="GDP", main="GDP --> GDP")
+  
   par(mfrow=c(1,1))    # place 1 plot per page
 })
 
-var1.reorder <- vars::VAR(z[,c("g.elec", "ChinaGDPgrowth", "g.China")], p = 1)
-irf.noconf <- vars::irf(var1.reorder, n.ahead=12, boot=F)
-plot(irf.noconf)
+# Need to reorder the variables for IRF command because I am using upper Cholesky but
+# this function uses lower Cholesky decomposition
+var.reordered <- vars::VAR(z[,c("g.GDP", "g.elec", "g.CO2")], p=1, type="const")
+
+# Plot the 10-step ahead IRFs for each variable
+
+# This code chunk modified from solution found online: 
+# https://stackoverflow.com/questions/40189328/r-plotting-irf-manually
+# I used this code method because it was easier to customize than the "canned" plot.irf method in the vars package
+set.seed(50)
+par(mfrow=c(3,3), oma = c(0,0,2,0) + 0.1, mar = c(5,4,1,0) + 0.1)
+for (i in 1:3){
+  for (j in 1:3){
+    var_plot=vars::irf(var.reordered, impulse =  paste(colnames(var.reordered$y)[i]), 
+                       response=paste(colnames(var.reordered$y)[j]), n.ahead = 10, ortho=TRUE, 
+                       boot=TRUE, runs=1000, ci=0.95)
+    plot(x=c(1:11), y=unlist(var_plot$Lower), type="l", lwd = 1.5, lty=2,col="red", 
+         ylab=paste(colnames(var.reordered$y)[j]), 
+         xlab="t Periods Ahead",
+         main=paste(var_plot$impulse, "->", colnames(var.reordered$y)[j], sep = " "), 
+         ylim=range(c(unlist(var_plot$Lower),unlist(var_plot$Upper))) )
+    lines(x=c(1:11),y=unlist(var_plot$Upper),type="l",lwd = 1.5, lty=2,col="red")
+    lines(x=c(1:11),y=unlist(var_plot$irf),type="l", lwd = 2)
+    abline(a = NULL, h = 0)
+  }
+}
 

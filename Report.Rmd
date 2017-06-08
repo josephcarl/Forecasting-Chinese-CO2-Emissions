@@ -3,8 +3,8 @@ title: "Forecasting Chinese Carbon Dioxide Emissions"
 author: "Joseph Carl"
 date: "June 7, 2017"
 output:
-  pdf_document: default
   html_notebook: default
+  pdf_document: default
 ---
 
 ## Introduction
@@ -44,21 +44,24 @@ Though the initial data comes in its original units (tonnes of CO~2~ per capita,
 local({
   par(mfrow=c(1,3))
   ts.plot(China.co2, main="Annual CO2 Emissions", xlab = "Year", ylab = "Tonnes/Person")
-  ts.plot(ChinaGDPgrowth, main="GDP Growth per Capita", xlab="Year", ylab = "% Change")
+  ts.plot(g.GDP, main="GDP Growth per Capita", xlab="Year", ylab = "% Change")
   ts.plot(ChinaElec, main="Annual Electric Consumption", xlab = "Year", ylab = "Kilowatt-Hours/Person")
 })
 ```
 
 To test for unit root, I use the augmented Dickey-Fuller test. The augmented Dickey Fuller tests the null hypothesis that the data is non-stationary against the alternate hypothesis that the data is stationary. The test must be run under three separate cases: that the data follows a random walk without drift or trend, a random walk with drift but no trend, or a random walk with drift and trend. The results of the augmented Dickey-Fuller tests are displayed for each variable are displayed in the following table.
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, results='asis'}
 ##### Unit Root Tests #####
-print("Annual CO2 Emissions")
-adf.results(China.co2, max.lags = 1) %>% as.data.frame(.)
-print("Annual GDP per Capita Growth")
-adf.results(ChinaGDPgrowth, max.lags = 1) %>% as.data.frame(.)
-print("Annual Electricity Consumption")
-adf.results(ChinaElec, max.lags = 1) %>% as.data.frame(.)
+# print("Annual CO2 Emissions")
+adf.results(China.co2, max.lags = 1) %>% 
+  knitr::kable(., format = "latex", caption = "Annual CO2 Emissions")
+# print("Annual GDP per Capita Growth")
+adf.results(g.GDP, max.lags = 1) %>% 
+  knitr::kable(., format = "latex", caption = "Annual GDP per Capita Growth")
+# print("Annual Electricity Consumption")
+adf.results(ChinaElec, max.lags = 1) %>% 
+  knitr::kable(., format = "latex", caption = "Annual Electricity Consumption per Capita")
 ```
 
 As the results show, we fail to reject the null hypothesis of nonstationarity for annual carbon dioxide emissions and coal consumption. However, we are able to reject the null hypothesis that GDP per capita growth is nonstationary in favor of the alternate hypothesis that it is stationary. This makes sense because this variable is already a growth rate, and growth rates tend to be stationary. I then log-difference the CO~2~ emissions and electricity consumption data so that those transformed variables are the growth rates of the original variables, and rerun the augmented Dickey-Fuller test on the transformed data. Those results are presented below.
@@ -66,11 +69,11 @@ As the results show, we fail to reject the null hypothesis of nonstationarity fo
 ```{r, echo=FALSE, results='asis'}
 # CO2 growth
 # print("Change in Annual CO2 Emissions (%)")
-adf.results(g.China, max.lags = 1) %>% 
-  knitr::kable(., format = "latex", caption = "Change in Annual CO2 Emissions (%)")
+adf.results(g.CO2, max.lags = 1) %>% 
+  knitr::kable(., format = "latex", caption = "Change in Annual CO2 Emissions (\\%)")
 # print("Change in Annual Electricity Consumption (%)")
 adf.results(g.elec, max.lags = 1) %>% 
-  knitr::kable(., format = "latex", caption = "Change in Annual Electricity Consumption (%)")
+  knitr::kable(., format = "latex", caption = "Change in Annual Electricity Consumption (\\%)")
 
 ```
 
@@ -83,7 +86,7 @@ As the following graph shows, both transformed variables appear much more statio
 ```{r, echo=FALSE}
 local({
   par(mfrow=c(1,2))
-  ts.plot(g.China, main=expression(paste(Delta, "Annual CO2 Emissions")), 
+  ts.plot(g.CO2, main=expression(paste(Delta, "Annual CO2 Emissions")), 
           xlab="Year", ylab="% Change")
   ts.plot(g.elec, main=expression(paste(Delta, "Annual Electricity Consumption")), 
           xlab="Year", ylab="% Change")
@@ -97,10 +100,10 @@ Knowing that the three variables for the model are now stationary, it is importa
 ```{r, echo=FALSE}
 local({
   par(mfrow=c(3,2), mar=c(2,4,4,4)) # Adjust margins so graphs don't overlap
-  Acf(g.China, lag.max = 10, main="ACF of CO2 Growth Rate")
-  Pacf(g.China, lag.max = 10, main="PACF of CO2 Growth Rate")
-  Acf(ChinaGDPgrowth, lag.max = 10, main="ACF of GDP Growth Rate")
-  Pacf(ChinaGDPgrowth, lag.max = 10, main="PACF of GDP Growth Rate")
+  Acf(g.CO2, lag.max = 10, main="ACF of CO2 Growth Rate")
+  Pacf(g.CO2, lag.max = 10, main="PACF of CO2 Growth Rate")
+  Acf(g.GDP, lag.max = 10, main="ACF of GDP Growth Rate")
+  Pacf(g.GDP, lag.max = 10, main="PACF of GDP Growth Rate")
   Acf(g.elec, lag.max = 10, main="ACF of Electricity Growth Rate")
   Pacf(g.elec, lag.max = 10, main="PACF of Electricity Growth Rate")
 })
@@ -111,8 +114,8 @@ For the CO~2~ growth rate, there is one statistically significant spike in both 
 For comparison, I also run the `VARselect` command from the `vars` package on the data. This command runs a VAR(1) through VAR(8) model on the data, and selects the VAR process that has the lowest AIC or BIC. The results of that test are given below.
 
 ```{r, echo=FALSE}
-# 3 variables: g.China (CO2), ChinaGDPgrowth, g.elec
-z <- cbind(g.China, ChinaGDPgrowth, g.elec) %>% na.omit
+# 3 variables: g.CO2 (CO2), g.GDP, g.elec
+z <- cbind(g.CO2, g.elec, g.GDP) %>% na.omit
 
 vars::VARselect(z, lag.max = 8, type = "trend")
 ```
@@ -153,9 +156,11 @@ $$\begin{bmatrix}
     \Delta GDP_{t-2} \\
     \Delta Elec_{t-2} \end{bmatrix}$$
 
-My goal is to recover the original structural parameters: $\mathbf{A_0}, \mathbf{\Gamma_0}, \mathbf{\Gamma_1}$. Simply put, I am estimating three separate equations, each of which says that the change in CO~2~ emissions per capita, GDP growth, and change in electricity consumption per capita are functions of the previous year's change in CO~2~ emissions per capita, GDP growth, and change in electricity consumption per capita. However, the matrix algebra involved in recovering the parameters requires the assumption that some coefficients equal zero, or else the model cannot be solved. 
+My goal is to use these equations to estimate the B matrix and calculate impulse response functions. Simply put, I am estimating three separate equations, each of which says that the change in CO~2~ emissions per capita, change in electricity consumption per capita, and GDP growth are functions of the previous year's change in CO~2~ emissions per capita, change in electricity consumption per capita, and GDP growth. However, the matrix algebra involved in recovering the parameters requires the assumption that some coefficients equal zero, or else the model cannot be solved. 
 
-For the Cholesky decomposition of the sigma matrix, I select an upper Cholesky matrix. I choose the upper matrix because of the order the variables enter the model (CO~2~, GDP, and then electricity growth), and the theory behind how the variables interact. For example, the second row, first column says that carbon dioxide growth has no effect on GDP growth, but the nonzero element in the first row second column says that GDP growth affects CO~2~ emissions. This makes sense, because more economic output means more production in factories, more cars on the road, and increased energy consumption, all of which increase emissions. It is a much weaker argument that some may cut back their energy consumption in response to economic growth, hence the zero element. The third row has zeros in the first two columns, indicating that carbon dioxide emissions and GDP growth do not affect growth in electricity consumption. The first of these makes sense, as electricity demand increases fossil fuel consumption, not the other way around. As for the second argument, it is still plausible that increased GDP could increase electricity consumption, as consumers and businesses begin to consume and invest more energy in response to economic growth. However, the alternate proposal that electricity consumption causes GDP growth is stronger, as electricity consumption is directly a part of the GDP calculation.
+For the Cholesky decomposition of the sigma matrix, I select an upper Cholesky matrix. I choose the upper matrix because of the order the variables enter the model (CO~2~, electricity growth, and then GDP), and the theory behind how the variables interact. For example, the second row, first column says that carbon dioxide growth has no effect on GDP growth, but the nonzero element in the first row second column says that GDP growth affects CO~2~ emissions. This makes sense, because more economic output means more production in factories, more cars on the road, and increased energy consumption, all of which increase emissions. It is a much weaker argument that some may cut back their energy consumption in response to economic growth, hence the zero element. The third row has zeros in the first two columns, indicating that carbon dioxide emissions and GDP growth do not affect growth in electricity consumption. The first of these makes sense, as electricity demand increases fossil fuel consumption, not the other way around. As for the second argument, it is still plausible that increased GDP could increase electricity consumption, as consumers and businesses begin to consume and invest more energy in response to economic growth. However, the alternate proposal that electricity consumption causes GDP growth is stronger, as electricity consumption is directly a part of the GDP calculation.
+
+Using this Cholesky decomposition, I calculate the impulse response functions for each variable to simulate the effect of a shock to each variable, and how it affects the system of equations over time.
 
 ### Logic Behind Imposing the Structure
 
@@ -167,24 +172,25 @@ The estimated results of the reduced-form equations are provided in the followin
 
 ```{r, echo=FALSE, warning=FALSE, results='asis'}
 # Estimate the models
-eq1 <- dynlm(g.China ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
-eq2 <- dynlm(ChinaGDPgrowth ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
-eq3 <- dynlm(g.elec ~ L(g.China, 1) + L(ChinaGDPgrowth, 1) + L(g.elec, 1), data = z)
+eq1 <- dynlm(g.CO2 ~ L(g.CO2, 1) + L(g.elec, 1) + L(g.GDP, 1), data = z)
+eq2 <- dynlm(g.elec ~ L(g.CO2, 1) + L(g.elec, 1) + L(g.GDP, 1), data = z)
+eq3 <- dynlm(g.GDP ~ L(g.CO2, 1) + L(g.elec, 1) + L(g.GDP, 1), data = z)
 
 # Extract coefficients to a matrix
 coef.mat <- local({
   out <- rbind(coef(eq1), coef(eq2), coef(eq3))
-  rownames(out) <- c("eq.CO2", "eq.GDP", "eq.elec")
+  rownames(out) <- c("eq.CO2", "eq.elec", "eq.GDP")
   out
 })
 Dhat.0 <- coef.mat[,1, drop=FALSE]        # matrix of constants
-Dhat.1 <- coef.mat[,2:4, drop=FALSE]      # matrix of coefficeinats on t-1 variables
+Dhat.1 <- coef.mat[,2:4, drop=FALSE]      # matrix of coefficeints t-1 variables
 
 # Get fitted residuals
 ehat.CO2 <- resid(eq1)
-ehat.GDP <- resid(eq2)
-ehat.elec <- resid(eq3)
-ehat <- rbind(ehat.CO2, ehat.GDP, ehat.elec)
+ehat.elec <- resid(eq2)
+ehat.GDP <- resid(eq3)
+
+ehat <- rbind(ehat.CO2, ehat.elec, ehat.GDP)
 
 sigma.ehat <- var(t(ehat))
 
@@ -192,9 +198,9 @@ sigma.ehat <- var(t(ehat))
 B <- chol(sigma.ehat)
   # Cholesky by default returns the upper matrix, which is what I want in this case
 
-stargazer(eq1, eq2, eq3, type = "latex", header = F, 
-          covariate.labels = c("lag CO2", "lag GDP", "lag Electricity"),
-          dep.var.labels = c("CO2", "GDP", "Electricity"))
+stargazer(eq1, eq2, eq3, type = "latex", header = F,
+          covariate.labels = c("lag CO2", "lag Electricity", "lag GDP"),
+          dep.var.labels = c("CO2", "Electricity", "GDP"))
 
 ```
 
@@ -218,61 +224,44 @@ Gamma.0; Gamma.1
 
 ### Impulse Response Functions
 
-One advantage of a VAR system of equations is it allows modeling a "shock" to one variable and calculating its effect on the system over several periods. To model this, I calculate the effect of a one standard deviation shock to each of the three variables, where one standard deviation refers to the deviation in the residuals of each of the three equations. The results of the three shocks are provided in the following chart. 
+One advantage of a VAR system of equations is it allows modeling a "shock" to one variable and calculating its effect on the system over several periods. To model this, I calculate the effect of a one standard deviation shock to each of the three variables, where one standard deviation refers to the deviation in the residuals of each of the three equations. The results of the three shocks are provided in the following graphs. 
+
 
 ```{r, echo=FALSE}
-# Impulse response function for a 1-std dev shock
-
-# Dr. Bejan's IRF function
-irf.fun <- function(A.mat, C.mat, struct.shock, n.ahead){
-  #---------------------------------------------------------------#
-  #-- Inputs:                                                   --#
-  #--     A.mat: 2-by-2 matrix of 1st lag coefficients          --#
-  #--     C.mat: Choleski decomposition matrix                  --#
-  #--     n.ahead: length of the IRFs (periods after the shock) --#
-  #--     struct.shock: (0,1) vector of structural shocks       --#
-  #---------------------------------------------------------------#
-  shocks <- matrix(struct.shock, ncol=1)                        
-  df <- matrix(0, ncol=n.ahead, nrow=nrow(A.mat))
-  for (i in 1:n.ahead){
-    if (i == 1){
-      df[,i] <- C.mat %*% shocks
-    } else {
-      df[,i] <- A.mat %*%  df[,i-1]
-    }
-  }  
-  rownames(df) <- rownames(A.mat)
-  colnames(df) <- paste("irf.",0:(n.ahead-1),sep="")
-  out <- t(df)  # transpose (time: by row, variable: by column)
-}
-co2.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(1,0,0), n.ahead = 12)
-gdp.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,1,0), n.ahead = 12)
-elec.shock.irf <- irf.fun(A.mat = Dhat.1, C.mat = B, struct.shock = c(0,0,1), n.ahead = 12)
-
-# Plot the IRF for each shock on each variable (9x9)
-local({
-  par(mar = rep(2, 4))
-  par(mfrow=c(3,3))    # place 4 plots on 1 page (2-by-2)
-  ts.plot(co2.shock.irf[,"eq.CO2"], ylab ="CO2", main="CO2 --> CO2")
-  ts.plot(co2.shock.irf[,"eq.GDP"], ylab ="GDP", main="CO2 --> GDP")
-  ts.plot(co2.shock.irf[,"eq.elec"], ylab ="Electricity", main="CO2 --> Elec")
-  
-  ts.plot(gdp.shock.irf[,"eq.CO2"], ylab ="CO2", main="GDP --> CO2")
-  ts.plot(gdp.shock.irf[,"eq.GDP"], ylab ="GDP", main="GDP --> GDP")
-  ts.plot(gdp.shock.irf[,"eq.elec"], ylab ="Elec", main="GDP --> Elec")
-  
-  ts.plot(elec.shock.irf[,"eq.CO2"], ylab ="CO2", main="Elec --> CO2")
-  ts.plot(elec.shock.irf[,"eq.GDP"], ylab ="GDP", main="Elec --> GDP")
-  ts.plot(elec.shock.irf[,"eq.elec"], ylab ="x", main="Elec --> Elec")
-  par(mfrow=c(1,1))    # place 1 plot per page
-})
-
-
+# Need to reorder the variables for IRF command because I am using upper Cholesky but
+  # this function uses lower Cholesky decomposition
+var.reordered <- vars::VAR(z[,c("g.GDP", "g.elec", "g.CO2")], p=1, type="const")
 ```
 
-Each row of graphs refer to the variable being shocked, and each column refers to the variable affected by the shock. For example, the upper left graph shows that a one-time spike in CO~2~ emissions results in a roughly 0.04% increase in CO~2~ emissions for that year, which then declines over time. By year four, only emissions are only 0.01% higher than they were relative to pre-shock levels. The same shock to emissions does not affect GDP growth rates or electricity consumption in the same period as the shock, but two periods later the same shock results in GDP growth and electricity consumption growth roughly 0.7% and 0.015% higher, respectively. Those shocks then die out over the following years. It is interesting that increased emissions would suggest GDP growth also rises. However, thinking about a shock to emissions that was not caused by GDP growth would include things like environmental accidents, such as oil spills or methane leaks that are unrelated to economic output. For this kind of emissions shock, it is plausible that GDP could actually grow after an environmental accident, as the government and businesses would have to spend more to clean it up.
+```{r, echo=FALSE}
+# Plot the 10-step ahead IRFs for each variable
+
+# This code chunk modified from solution found online: 
+# https://stackoverflow.com/questions/40189328/r-plotting-irf-manually
+  # I used this code method because it was easier to customize than the "canned" plot.irf method in the vars package
+set.seed(50)
+par(mfrow=c(3,3), oma = c(0,0,2,0) + 0.1, mar = c(5,4,1,0) + 0.1)
+for (i in 1:3){
+  for (j in 1:3){
+    var_plot=vars::irf(var.reordered, impulse =  paste(colnames(var.reordered$y)[i]), 
+                     response=paste(colnames(var.reordered$y)[j]), n.ahead = 10, ortho=TRUE, 
+                     boot=TRUE, runs=1000, ci=0.95)
+    plot(x=c(1:11), y=unlist(var_plot$Lower), type="l", lwd = 1.5, lty=2,col="red", 
+        ylab=paste(colnames(var.reordered$y)[j]), 
+        xlab="t Periods Ahead",
+        main=paste(var_plot$impulse, "->", colnames(var.reordered$y)[j], sep = " "), 
+        ylim=range(c(unlist(var_plot$Lower),unlist(var_plot$Upper))) )
+    lines(x=c(1:11),y=unlist(var_plot$Upper),type="l",lwd = 1.5, lty=2,col="red")
+    lines(x=c(1:11),y=unlist(var_plot$irf),type="l", lwd = 2)
+    abline(a = NULL, h = 0)
+  }
+}
+```
 
 
+Each of the three graphs graphs refer to the individual variable being shocked: CO~2~ emissions, Electricity consumption, and GDP growth. The three rows of each graph refer to the variable affected by the shock: GDP growth, electricity consumption, and CO~2~ emissions. For example, the graph shows that a one-time spike in CO~2~ emissions results in a roughly 0.5% increase in GDP growth in the year following the shock, and the growth then decays to zero by the third year after the shock. However, because the confidence bands for the 95% confidence interval include zero, we cannot say that this effect is statistically different from zero. In other words, it is possible that a shock to emissions could actually have no effect on GDP growth, and could possibly even have a negative effect. The same shock to emissions has statistically no effect on electricity consumption and even CO~2~ emissions  0.04% increase in CO~2~ emissions for that year, which then declines over time. By year four, only emissions are only 0.01% higher than they were relative to pre-shock levels. The same shock to emissions does not affect GDP growth rates or electricity consumption in the same period as the shock, but two periods later the same shock results in GDP growth and electricity consumption growth roughly 0.7% and 0.015% higher, respectively. Those shocks then die out over the following years. It is interesting that increased emissions would suggest GDP growth also rises. However, thinking about a shock to emissions that was not caused by GDP growth would include things like environmental accidents, such as oil spills or methane leaks that are unrelated to economic output. For this kind of emissions shock, it is plausible that GDP could actually grow after an environmental accident, as the government and businesses would have to spend more to clean it up.
+
+The layout of the shocks echoes the structure of the upper Cholesky matrix mentioned above. As mentioned by my theory, CO~2~ emissions are likely to be affected by changes in CO~2~, electricity consumption, and GDP at time $t=0$, which is reflected in the first column of the graph, as the effect of all three shocks on emissions are nonzero at $t=0$. Similarly, the upper Cholesky matrix says that CO~2~ does not affect electricity and GDP at time $t=0$, and both of those shocks are zero at $t=0$ in the first row of graphs. Similarly, changes in electricity consumption are theorized not to affect GDP at time $t=0$, and the second row, third column graph shows that this shock is zero at $t=0$.
 
 ## Conclusion
 
