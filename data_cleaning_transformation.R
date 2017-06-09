@@ -8,6 +8,10 @@ library(tidyverse)
 library(urca)
 library(dynlm)
 
+# Not all data originally collected was used in this analysis, I narrowed it
+  # down to three variables: C02 per capita, GDP per capita, and electricity demand per capita
+  # that data is saved to an .RData file at the end of this script
+
 # Read in co2 data
 co2percap <- read_excel("indicator CDIAC carbon_dioxide_emissions_per_capita.xlsx")
 
@@ -84,4 +88,8 @@ g.coal <- diff(log(ChinaCoal))
 
 # Combine g.CO2, g.GDP, and g.coal into a single object
 z <- cbind(g.CO2, g.GDP, g.coal) %>% na.omit
+
+# Save the objects necessary for the Rmd file to an .RData file
+save(China.co2, g.GDP, ChinaElec, g.CO2, g.elec, file = "china_data.RData")
+rm(China.co2, g.GDP, ChinaElec, g.CO2, g.elec)
 

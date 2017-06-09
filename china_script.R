@@ -232,7 +232,7 @@ z <- cbind(g.CO2, g.elec, g.GDP) %>% na.omit
 cov.matrix <- var(z) # Reduced form covariance matrix
 
 # Estimate the models
-  # Will use 1 lag because VARselect() said minimum AIC occurs when using 1 lag
+  # Will use 1 lag because VARselect() said minimum SC occurs when using 1 lag
   # and theoretically it makes sense that what happened 2+ years ago has little explanatory power
   # for what happens today
 
